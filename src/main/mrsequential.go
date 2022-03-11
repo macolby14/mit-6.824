@@ -14,7 +14,7 @@ import "log"
 import "io/ioutil"
 import "sort"
 
-// for sorting by key.
+// for sorting by key
 type ByKey []mr.KeyValue
 
 // for sorting by key.

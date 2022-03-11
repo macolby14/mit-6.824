@@ -34,8 +34,21 @@ func Worker(mapf func(string, string) []KeyValue,
 	// Your worker implementation here.
 
 	// uncomment to send the Example RPC to the master.
-	// CallExample()
+	jobActive := true
+	for jobActive{
+		jobActive = CallMaster()
+	}
 
+	fmt.Printf("worker is done")
+}
+
+func CallMaster() bool {
+	args := FetchTaskArgs{}
+	reply := FetchTaskReply{}
+
+	res := call("Master.FetchTask",&args,&reply)
+		
+	return res
 }
 
 //
