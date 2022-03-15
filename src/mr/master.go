@@ -13,6 +13,8 @@ import (
 type Master struct {
 	// Your definitions here.
 	MapTaskQueue []string
+	ReduceTaskQueue []int
+	MapTaskAwaiting map[string]bool
 	MapTaskComplete []string
 	IntermediateSize int
 }
@@ -30,16 +32,34 @@ func (m *Master) Example(args *ExampleArgs, reply *ExampleReply) error {
 }
 
 func (m *Master) FetchTask(args *FetchTaskArgs, reply *FetchTaskReply) error {
-	if( len(m.MapTaskQueue) > 0 ){
+	if len(m.MapTaskQueue) > 0 {
 		reply.TaskType = "map"
 		reply.IntermediateSize = m.IntermediateSize
-		reply.File = m.MapTaskQueue[0]
+		file := m.MapTaskQueue[0]
+		reply.File = file
+		m.MapTaskAwaiting[file] = true
 		m.MapTaskQueue = m.MapTaskQueue[1:]
+		fmt.Printf("Server reply %v %v\n", reply.TaskType, reply.File)
+	}
+	if len(m.MapTaskAwaiting) > 0 {
+		fmt.Printf("Server reply. Come back after map tasks are done.\n")
+		return nil
+	}
+	if len(m.ReduceTaskQueue) > 0 {
+		reply.TaskType = "reduce"
+		bucket := m.ReduceTaskQueue[0]
+		file := fmt.Sprintf("mr-int-%v",bucket)
+		reply.File = file
 		fmt.Printf("Server reply %v %v\n", reply.TaskType, reply.File)
 	}
 	return nil
 }
 
+func (m *Master) ReportCompletion(args *ReportCompletionArgs, reply *ReportCompletionReply) error {
+	file := args.File
+	delete(m.MapTaskAwaiting, file)
+	return nil
+}
 
 //
 // start a thread that listens for RPCs from worker.go
@@ -91,6 +111,12 @@ func MakeMaster(files []string, nReduce int) *Master {
 	* Once all map tasks are done, read the intermediate files to get a list of reduce tasks 
 	*/
 
+
+	m.MapTaskAwaiting = make(map[string]bool)
+	m.ReduceTaskQueue = make([]int, nReduce)
+	for i := 0; i < nReduce; i++ {
+		m.ReduceTaskQueue[i] = i
+	}
 
 	for _, filename := range files {
 		m.MapTaskQueue = append(m.MapTaskQueue, filename)

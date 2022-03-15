@@ -48,7 +48,16 @@ func CallMaster(mapf func(string, string) []KeyValue, reducef func(string, []str
 	buckets := reply.IntermediateSize
 
 	mapTask(mapf, filename, buckets)
+	reportCompletion(filename)
 
+	return res
+}
+
+func reportCompletion(filename string) bool{
+	args := ReportCompletionArgs{}
+	args.File = filename
+	reply := ReportCompletionReply{}
+	res := call("Master.ReportCompletion",&args,&reply)
 	return res
 }
 

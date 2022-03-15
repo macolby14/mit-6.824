@@ -35,6 +35,13 @@ type FetchTaskReply struct {
 	IntermediateSize int
 }
 
+type ReportCompletionArgs struct {
+	File string
+}
+
+type ReportCompletionReply struct {
+	
+}
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the master.
