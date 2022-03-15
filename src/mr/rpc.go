@@ -6,8 +6,10 @@ package mr
 // remember to capitalize all names.
 //
 
-import "os"
-import "strconv"
+import (
+	"os"
+	"strconv"
+)
 
 //
 // example to show how to declare the arguments
@@ -25,12 +27,12 @@ type ExampleReply struct {
 // Add your RPC definitions here.
 
 type FetchTaskArgs struct {
-
 }
 
 type FetchTaskReply struct {
 	TaskType string
 	File string
+	IntermediateSize int
 }
 
 

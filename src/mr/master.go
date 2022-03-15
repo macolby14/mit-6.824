@@ -1,17 +1,20 @@
 package mr
 
-import "log"
-import "net"
-import "os"
-import "net/rpc"
-import "net/http"
-import "fmt"
+import (
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"os"
+)
 
 
 type Master struct {
 	// Your definitions here.
 	MapTaskQueue []string
 	MapTaskComplete []string
+	IntermediateSize int
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -29,6 +32,7 @@ func (m *Master) Example(args *ExampleArgs, reply *ExampleReply) error {
 func (m *Master) FetchTask(args *FetchTaskArgs, reply *FetchTaskReply) error {
 	if( len(m.MapTaskQueue) > 0 ){
 		reply.TaskType = "map"
+		reply.IntermediateSize = m.IntermediateSize
 		reply.File = m.MapTaskQueue[0]
 		m.MapTaskQueue = m.MapTaskQueue[1:]
 		fmt.Printf("Server reply %v %v\n", reply.TaskType, reply.File)
@@ -75,7 +79,7 @@ func (m *Master) Done() bool {
 //
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{}
-
+	m.IntermediateSize = nReduce
 	// Your code here.
 	/**
 	* Make a queue of map tasks by reading the file inputs
