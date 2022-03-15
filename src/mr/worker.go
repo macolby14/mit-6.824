@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/rpc"
 	"os"
-	"sync"
 )
 
 //
@@ -28,12 +27,6 @@ func ihash(key string) int {
 	return int(h.Sum32() & 0x7fffffff)
 }
 
-type control struct {
-	locks map[int]*sync.Mutex
-	mu sync.Mutex
-} 
-
-var cont = &control{}
 //
 // main/mrworker.go calls this function.
 //
@@ -53,6 +46,13 @@ func CallMaster(mapf func(string, string) []KeyValue, reducef func(string, []str
 	res := call("Master.FetchTask",&args,&reply)
 	filename := reply.File	
 	buckets := reply.IntermediateSize
+
+	mapTask(mapf, filename, buckets)
+
+	return res
+}
+
+func mapTask(mapf func(string, string) []KeyValue, filename string, buckets int){
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Panicf("cannot read %v", filename)
@@ -66,18 +66,6 @@ func CallMaster(mapf func(string, string) []KeyValue, reducef func(string, []str
 	kva := mapf(filename, string(content))
 	for _, kv := range kva {
 		bucket := ihash(kv.Key) % buckets
-		cont.mu.Lock()
-		if cont.locks == nil{
-			cont.locks = make(map[int]*sync.Mutex)
-		}
-
-		mu, done := cont.locks[bucket]
-		if !done {
-			cont.locks[bucket] = &sync.Mutex{}
-			mu = cont.locks[bucket]
-		} 
-		mu.Lock()
-		cont.mu.Unlock()
 		intermediateFile := fmt.Sprintf("mr-int-%v",bucket)
 		file, err := os.OpenFile(intermediateFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY,0777)
 		if err != nil {
@@ -88,10 +76,8 @@ func CallMaster(mapf func(string, string) []KeyValue, reducef func(string, []str
 			log.Panicf("Did not write to the file %v due to %v",intermediateFile, err)
 		}
 		file.Close()
-		mu.Unlock()
 	}
 	log.Printf("Processed file %v with map task\n",filename)
-	return res
 }
 
 //
