@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"sync"
 )
 
 
@@ -17,6 +18,7 @@ type Master struct {
 	MapTaskAwaiting map[string]bool
 	MapTaskComplete []string
 	IntermediateSize int
+	mu sync.Mutex
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -32,6 +34,8 @@ func (m *Master) Example(args *ExampleArgs, reply *ExampleReply) error {
 }
 
 func (m *Master) FetchTask(args *FetchTaskArgs, reply *FetchTaskReply) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if len(m.MapTaskQueue) > 0 {
 		reply.TaskType = "map"
 		reply.IntermediateSize = m.IntermediateSize
@@ -40,6 +44,7 @@ func (m *Master) FetchTask(args *FetchTaskArgs, reply *FetchTaskReply) error {
 		m.MapTaskAwaiting[file] = true
 		m.MapTaskQueue = m.MapTaskQueue[1:]
 		fmt.Printf("Server reply %v %v\n", reply.TaskType, reply.File)
+		return nil
 	}
 	if len(m.MapTaskAwaiting) > 0 {
 		fmt.Printf("Server reply. Come back after map tasks are done.\n")
@@ -48,6 +53,7 @@ func (m *Master) FetchTask(args *FetchTaskArgs, reply *FetchTaskReply) error {
 	if len(m.ReduceTaskQueue) > 0 {
 		reply.TaskType = "reduce"
 		bucket := m.ReduceTaskQueue[0]
+		m.ReduceTaskQueue = m.ReduceTaskQueue[1:]
 		file := fmt.Sprintf("mr-int-%v",bucket)
 		reply.File = file
 		fmt.Printf("Server reply %v %v\n", reply.TaskType, reply.File)
@@ -56,6 +62,8 @@ func (m *Master) FetchTask(args *FetchTaskArgs, reply *FetchTaskReply) error {
 }
 
 func (m *Master) ReportCompletion(args *ReportCompletionArgs, reply *ReportCompletionReply) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	file := args.File
 	delete(m.MapTaskAwaiting, file)
 	return nil
@@ -82,10 +90,12 @@ func (m *Master) server() {
 // if the entire job has finished.
 //
 func (m *Master) Done() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	ret := false
 
 	// Your code here.
-	if len(m.MapTaskQueue) == 0 {
+	if len(m.ReduceTaskQueue) == 0 {
 		ret = true
 	}
 
@@ -99,6 +109,7 @@ func (m *Master) Done() bool {
 //
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{}
+	m.mu = sync.Mutex{}
 	m.IntermediateSize = nReduce
 	// Your code here.
 	/**

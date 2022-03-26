@@ -1,12 +1,15 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"log"
 	"net/rpc"
 	"os"
+	"sort"
+	"time"
 )
 
 //
@@ -35,6 +38,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 	jobActive := true
 	for jobActive{
 		jobActive = CallMaster(mapf, reducef)
+		time.Sleep(time.Second)
 	}
 
 	fmt.Printf("worker is done")
@@ -46,8 +50,16 @@ func CallMaster(mapf func(string, string) []KeyValue, reducef func(string, []str
 	res := call("Master.FetchTask",&args,&reply)
 	filename := reply.File	
 	buckets := reply.IntermediateSize
+	taskType := reply.TaskType
 
-	mapTask(mapf, filename, buckets)
+	if taskType == "map"{
+		mapTask(mapf, filename, buckets)
+	} else if taskType == "reduce"{
+		fmt.Println("Performing reduce task")
+		reduceTask(reducef, filename)
+	}else{
+		fmt.Println("error in task type")
+	}
 	reportCompletion(filename)
 
 	return res
@@ -80,13 +92,54 @@ func mapTask(mapf func(string, string) []KeyValue, filename string, buckets int)
 		if err != nil {
 			log.Panicf("Could not open or append to intermediate %v because %v",intermediateFile, err)
 		}
-		_, err = file.WriteString(fmt.Sprintf("%v %v\n",kv.Key,kv.Value))
+		enc := json.NewEncoder(file)
+		err = enc.Encode(&kv)
 		if err != nil {
-			log.Panicf("Did not write to the file %v due to %v",intermediateFile, err)
+			log.Panicf("Something wen wrong encoding JSON")
 		}
 		file.Close()
 	}
 	log.Printf("Processed file %v with map task\n",filename)
+}
+
+
+func reduceTask(reducef func(string, []string) string, filename string){
+	kva := make([]KeyValue,0)
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Panicf("cannot read %v", filename)
+	}
+	defer file.Close()
+	dec := json.NewDecoder(file)
+	for {
+		var kv KeyValue
+		if err := dec.Decode(&kv); err != nil {
+			break
+		}
+		kva = append(kva, kv)
+	}
+
+	sort.Slice(kva, func(i, j int) bool {
+		return kva[i].Key < kva[j].Key
+	})
+
+	i := 0
+	for j := i+1; j <= len(kva); j++ {	
+		if j<len(kva) && kva[i].Key == kva[j].Key{
+			j++
+		}else{
+			values := make([]string, j-i)
+			for ind, value := range kva[i:j]{
+				values[ind] = value.Value 
+			}
+			res := reducef(kva[i].Key, values)
+			log.Printf("%v %v", kva[i].Key, res)
+			i = j
+		}
+	}
+
+
+	file.Close()
 }
 
 //
